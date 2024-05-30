@@ -12,6 +12,30 @@ class Database implements DatabaseInterface
     public function __construct(mysqli $mysqli)
     {
         $this->mysqli = $mysqli;
+        $pattern = '/\?([dfa#]?)/';
+        $query = preg_replace_callback($pattern, function($matches) use (&$args) {
+            $arg = array_shift($args);
+            if ($matches[1] === '#') {
+                if ($arg === $this->skip()) {
+                    return '';
+                }
+                if (is_array($arg)) {
+                    return implode(', ', array_map(fn($value) => "`$value`", $arg));
+                }
+                return "`$arg`";
+            }
+            if (is_array($arg)) {
+                if (array_keys($arg) !== range(0, count($arg) - 1)) {
+                    return implode(', ', array_map(function($key, $value) {
+                        return "`$key` = " . $this->formatValue($value);
+                    }, array_keys($arg), $arg));
+                }
+                return implode(', ', array_map([$this, 'formatValue'], $arg));
+            }
+
+            return $this->formatValue($arg, $matches[1]);
+        }, $query);
+
     }
 
     public function buildQuery(string $query, array $args = []): string
